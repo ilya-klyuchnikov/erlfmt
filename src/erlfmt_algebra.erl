@@ -560,6 +560,8 @@ format(Width, Column, [{Indent, _, #doc_group{group = X}} | T0]) ->
             format(Width, Column, [{Indent, break, X} | T])
     end.
 
+-spec peek_next_string_length([{integer(), mode(), doc()}]) ->
+    {integer(), [{integer(), mode(), doc()}]}.
 peek_next_string_length([{Indent, M, #doc_cons{left = Left, right = Right}} | T]) ->
     peek_next_string_length([{Indent, M, Left}, {Indent, M, Right} | T]);
 peek_next_string_length([{_, _, #doc_string{length = Length}} | _] = Stack) ->
@@ -570,6 +572,7 @@ peek_next_string_length(Stack) ->
     {0, Stack}.
 
 %% after a group breaks, we force next flex break to also break
+-spec force_next_flex_break([{integer(), mode(), doc()}]) -> [{integer(), mode(), doc()}].
 force_next_flex_break([{Indent, M, #doc_break{flex_or_strict = flex} = Break} | T]) ->
     [{Indent, M, Break#doc_break{flex_or_strict = strict}} | T];
 force_next_flex_break([{_, _, #doc_break{flex_or_strict = strict}} | _] = Stack) ->
@@ -581,6 +584,7 @@ force_next_flex_break([Other | T]) ->
 force_next_flex_break([]) ->
     [].
 
+-spec indent(integer()) -> binary().
 indent(0) ->
     ?newline;
 indent(Indent) when is_integer(Indent) ->

@@ -49,6 +49,7 @@
 
 -type fmt_node() ::
     erlfmt_parse:abstract_node() | {op, _, {clause_op, _}, _, _} | erlfmt_parse:af_binelement(_).
+-type node_or_meta() :: fmt_node() | erlfmt_scan:anno().
 -type fmt_op() :: atom() | {clause_op, fmt_op()}.
 
 -spec to_algebra(fmt_node()) -> erlfmt_algebra:doc().
@@ -351,12 +352,15 @@ rewrite_assoc(Op, MetaABC0, A, {op, MetaBC0, Op, B0, C} = BC) ->
 rewrite_assoc(Op, Meta, Left, Right) ->
     {op, Meta, Op, Left, Right}.
 
+-spec update_meta_location(erlfmt_scan:anno(), node_or_meta(), node_or_meta()) ->
+    erlfmt_scan:anno().
 update_meta_location(Meta, First, Last) ->
     Meta#{
         location := erlfmt_scan:get_anno(location, First),
         end_location := erlfmt_scan:get_anno(end_location, Last)
     }.
 
+-spec binary_operand_to_algebra(fmt_op(), fmt_node(), integer()) -> erlfmt_algebra:doc().
 binary_operand_to_algebra(Op, {op, Meta, Op, Left, Right}, Indent) ->
     %% Same operator, no parens, means correct side and no repeated nesting
     case erlfmt_scan:get_anno(parens, Meta, false) of
