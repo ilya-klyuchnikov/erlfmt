@@ -47,7 +47,11 @@
 
 -define(INDENT, 4).
 
--spec to_algebra(erlfmt_parse:abstract_node()) -> erlfmt_algebra:doc().
+-type fmt_node() ::
+    erlfmt_parse:abstract_node() | {op, _, {clause_op, _}, _, _} | erlfmt_parse:af_binelement(_).
+-type fmt_op() :: atom() | {clause_op, fmt_op()}.
+
+-spec to_algebra(fmt_node()) -> erlfmt_algebra:doc().
 to_algebra({shebang, Meta, String}) ->
     Doc = string(String),
     combine_comments(Meta, Doc);
@@ -106,6 +110,7 @@ to_algebra(Expr) ->
             combine_comments(Meta, Doc)
     end.
 
+-spec expr_to_algebra(fmt_node()) -> erlfmt_algebra:doc().
 expr_to_algebra(Expr) when is_tuple(Expr) ->
     Meta = element(2, Expr),
     Doc = do_expr_to_algebra(Expr),
@@ -113,6 +118,7 @@ expr_to_algebra(Expr) when is_tuple(Expr) ->
 expr_to_algebra(Other) ->
     do_expr_to_algebra(Other).
 
+-spec do_expr_to_algebra(fmt_node()) -> erlfmt_algebra:doc().
 do_expr_to_algebra({string, Meta, _Value}) ->
     string_to_algebra(erlfmt_scan:get_anno(text, Meta));
 do_expr_to_algebra({char, #{text := "$ "}, $\s}) ->
@@ -230,6 +236,7 @@ do_expr_to_algebra({body, _Meta, Exprs}) ->
 do_expr_to_algebra(Other) ->
     error(unsupported, [Other]).
 
+-spec surround(Doc, Doc, Doc, Doc, Doc) -> Doc when Doc :: erlfmt_algebra:doc().
 surround(Left, LeftSpace, Doc, RightSpace, Right) ->
     group(
         break(
@@ -239,12 +246,14 @@ surround(Left, LeftSpace, Doc, RightSpace, Right) ->
         )
     ).
 
+-spec surround_block(Doc, Doc, Doc) -> Doc when Doc :: erlfmt_algebra:doc().
 surround_block(Left, Doc, Right) ->
     concat(
         force_breaks(),
         group(line(concat(Left, nest(concat(line(), Doc), ?INDENT)), Right))
     ).
 
+-spec string_to_algebra(string()) -> erlfmt_algebra:doc().
 string_to_algebra(Text) ->
     case string:split(Text, "\n", all) of
         [Line] ->
@@ -257,6 +266,7 @@ string_to_algebra(Text) ->
             concat([force_breaks(), FirstD, line(), LinesD])
     end.
 
+-spec string_lines_to_algebra([string()]) -> erlfmt_algebra:doc().
 string_lines_to_algebra([LastLine]) ->
     string(["\"" | LastLine]);
 string_lines_to_algebra([Line, "\""]) ->
@@ -266,6 +276,8 @@ string_lines_to_algebra([Line | Lines]) ->
     line(LineD, string_lines_to_algebra(Lines)).
 
 %% there's always at least two elements in concat
+
+-spec concat_to_algebra([fmt_node()]) -> erlfmt_algebra:doc().
 concat_to_algebra([Value1, Value2 | _] = Values) ->
     ValuesD = lists:map(fun expr_to_algebra/1, Values),
     case has_break_between(Value1, Value2) of
@@ -275,6 +287,7 @@ concat_to_algebra([Value1, Value2 | _] = Values) ->
             group(fold_doc(fun erlfmt_algebra:break/2, ValuesD))
     end.
 
+-spec unary_op_to_algebra(atom(), fmt_node()) -> erlfmt_algebra:doc().
 unary_op_to_algebra(Op, Expr) ->
     OpD = string(atom_to_binary(Op, utf8)),
     ExprD = expr_to_algebra(Expr),
@@ -286,6 +299,7 @@ unary_op_to_algebra(Op, Expr) ->
             concat(OpD, ExprD)
     end.
 
+-spec unary_needs_space(fmt_node(), atom()) -> boolean().
 unary_needs_space(_, Op) when Op =:= 'not'; Op =:= 'bnot'; Op =:= 'catch' ->
     true;
 unary_needs_space({op, Meta, _, _}, _) ->
@@ -293,11 +307,14 @@ unary_needs_space({op, Meta, _, _}, _) ->
 unary_needs_space(_, _) ->
     false.
 
-field_to_algebra(Op, Left, Right) ->
+-spec field_to_algebra(erlfmt_algebra:doc(), fmt_node(), fmt_node()) -> erlfmt_algebra:doc().
+field_to_algebra(OpD, Left, Right) ->
     LeftD = expr_to_algebra(Left),
     RightD = expr_to_algebra(Right),
-    field_to_algebra(Op, Left, Right, LeftD, RightD, ?INDENT).
+    field_to_algebra(OpD, Left, Right, LeftD, RightD, ?INDENT).
 
+-spec binary_op_to_algebra(fmt_op(), erlfmt_scan:anno(), fmt_node(), fmt_node()) ->
+    erlfmt_algebra:doc().
 binary_op_to_algebra('..', _Meta, Left, Right) ->
     %% .. is special - non-assoc, no spaces around and never breaks
     concat(expr_to_algebra(Left), <<"..">>, expr_to_algebra(Right));
@@ -314,6 +331,7 @@ binary_op_to_algebra(Op, Meta0, Left0, Right0) ->
     {op, _Meta, Op, Left, Right} = rewrite_assoc(Op, Meta, Left0, Right0),
     binary_op_to_algebra(Op, Meta, Left, Right, ?INDENT).
 
+-spec rewrite_assoc(fmt_op(), erlfmt_scan:anno(), fmt_node(), fmt_node()) -> fmt_node().
 rewrite_assoc('=' = Op, Meta, Left, Right) ->
     {op, Meta, Op, Left, Right};
 rewrite_assoc('::' = Op, Meta, Left, Right) ->
@@ -438,6 +456,7 @@ container_common(Meta, Values, Left, Right, BreakKind, LastFits) ->
 
 -type break_behaviour() :: flex_break | no_break | #break{}.
 
+-spec break_behaviour(erlfmt_scan:anno(), [fmt_node()], break_behaviour()) -> break_behaviour().
 break_behaviour(Meta, Values, Break) ->
     HasOpeningLineBreak = has_opening_line_break(Meta, Values),
     HasTrailingComments = has_trailing_comments(Values),
@@ -490,10 +509,11 @@ surround_container(#break{inner = ForceInner, outer = ForceOuter}, Left, Doc, Ri
     InnerDoc = group(concat(maybe_force_breaks(ForceInner), Doc)),
     surround(Left, <<"">>, concat(maybe_force_breaks(ForceOuter), InnerDoc), <<"">>, Right).
 
+-type last_fits_fun() :: fun((erlfmt_algebra:doc(), disabled | enabled) -> erlfmt_algebra:doc()).
+
 %% last_fits_fun returns a fun similar to next_break_fits/2
 %% that takes into account the desired fits behaviour.
--spec last_fits_fun(last_normal | last_fits, [erlfmt_parse:abstract_node()]) ->
-    fun((erlfmt_algebra:doc(), disabled | enabled) -> erlfmt_algebra:doc()).
+-spec last_fits_fun(last_normal | last_fits, [fmt_node()]) -> last_fits_fun().
 last_fits_fun(last_fits, Values) when Values =/= [] ->
     case is_next_break_fits(lists:last(Values)) of
         true -> fun erlfmt_algebra:next_break_fits/2;
@@ -513,12 +533,13 @@ has_trailing_comments(Values) ->
             PostComments =/= []
     end.
 
--spec has_opening_line_break(erlfmt_scan:anno(), [erlfmt_parse:abstract_node()]) -> boolean().
+-spec has_opening_line_break(erlfmt_scan:anno(), [fmt_node()]) -> boolean().
 has_opening_line_break(_Meta, []) ->
     false;
 has_opening_line_break(Meta, [HeadValue | _]) ->
     has_inner_break(Meta, HeadValue).
 
+-spec has_any_break_between([fmt_node()]) -> boolean().
 has_any_break_between([Head | [Head2 | _] = Tail]) ->
     has_break_between(Head, Head2) orelse has_any_break_between(Tail);
 has_any_break_between([{cons, _, Head, Tail}]) ->
@@ -679,6 +700,7 @@ fun_to_algebra({type, Meta, Args, Result}) ->
     Doc = combine_comments(Meta, Doc0),
     surround(<<"fun(">>, <<"">>, Doc, <<"">>, <<")">>).
 
+-spec clauses_to_algebra(erlfmt_parse:af_clause_seq()) -> erlfmt_algebra:doc().
 clauses_to_algebra([Clause | _] = Clauses) ->
     ClausesD = fold_clauses_to_algebra(Clauses),
     HasBreak = clause_has_break(Clause),
@@ -855,11 +877,14 @@ combine_comments_no_force(Meta, Doc) ->
     {Pre, Post} = comments(Meta),
     combine_post_comments(Post, Meta, combine_pre_comments(Pre, Meta, Doc)).
 
+-spec combine_comments(erlfmt_scan:anno() | fmt_node(), erlfmt_algebra:doc()) ->
+    erlfmt_algebra:doc().
 combine_comments(Meta, Doc) ->
     {Pre, Post} = comments(Meta),
     CombinedD = combine_post_comments(Post, Meta, combine_pre_comments(Pre, Meta, Doc)),
     concat(maybe_force_breaks(Pre =/= [] orelse Post =/= []), CombinedD).
 
+-spec combine_comments_with_dot(erlfmt_scan:anno(), erlfmt_algebra:doc()) -> erlfmt_algebra:doc().
 combine_comments_with_dot(Meta, Doc) ->
     {Pre, PreDot, Post} = comments_with_pre_dot(Meta),
     PreDotDoc = combine_pre_dot_comments(PreDot, Doc),
