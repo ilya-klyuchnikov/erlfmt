@@ -370,6 +370,8 @@ binary_operand_to_algebra(Op, {op, Meta, Op, Left, Right}, Indent) ->
 binary_operand_to_algebra(_ParentOp, Expr, _Indent) ->
     expr_to_algebra(Expr).
 
+-spec binary_op_to_algebra(fmt_op(), node_or_meta(), fmt_node(), fmt_node(), integer()) ->
+    erlfmt_algebra:doc().
 binary_op_to_algebra(Op, Meta, Left, Right, Indent) ->
     LeftD = binary_operand_to_algebra(Op, Left, Indent),
     RightD = binary_operand_to_algebra(Op, Right, 0),
@@ -391,6 +393,14 @@ binary_op_to_algebra(Op, Meta, Left, Right, Indent) ->
         end,
     combine_comments(Meta, maybe_wrap_in_parens(Meta, Doc)).
 
+-spec field_to_algebra(
+    OpD :: erlfmt_algebra:doc(),
+    Left :: fmt_node(),
+    Right :: fmt_node(),
+    LeftD :: erlfmt_algebra:doc(),
+    RightD :: erlfmt_algebra:doc(),
+    Indent :: integer()
+) -> erlfmt_algebra:doc().
 field_to_algebra(OpD, Left, Right, LeftD, RightD, Indent) ->
     case
         (is_call(Right) orelse is_next_break_fits(Right)) andalso
@@ -404,19 +414,30 @@ field_to_algebra(OpD, Left, Right, LeftD, RightD, Indent) ->
             breakable_binary_op_to_algebra(OpD, Left, Right, LeftD, RightD, Indent)
     end.
 
+-spec is_call(fmt_node()) -> boolean().
 is_call({call, _, _, _}) -> true;
 is_call({macro_call, _, _, _}) -> true;
 is_call(_) -> false.
 
+-spec breakable_binary_op_to_algebra(
+    OpD :: erlfmt_algebra:doc(),
+    Left :: fmt_node(),
+    Right :: fmt_node(),
+    LeftD :: erlfmt_algebra:doc(),
+    RightD :: erlfmt_algebra:doc(),
+    Indent :: integer()
+) -> erlfmt_algebra:doc().
 breakable_binary_op_to_algebra(OpD, Left, Right, LeftD, RightD, Indent) ->
     HasBreak = has_break_between(Left, Right),
     RightOpD = nest(break(concat(<<" ">>, OpD), group(RightD)), Indent, break),
     concat(group(LeftD), group(concat(maybe_force_breaks(HasBreak), RightOpD))).
 
+-spec union_to_algebra(erlfmt_scan:anno(), fmt_node(), fmt_node()) -> erlfmt_algebra:doc().
 union_to_algebra(Meta, Left, Right) ->
     Doc = break(expr_to_algebra(Left), fold_unions(Right)),
     group(concat(maybe_force_breaks(is_multiline(Meta)), Doc)).
 
+-spec fold_unions(fmt_node()) -> erlfmt_algebra:doc().
 fold_unions({op, Meta, '|', Left, Right}) ->
     LeftD = expr_to_algebra(Left),
     LeftPipeD = concat(<<"| ">>, LeftD),
@@ -428,6 +449,7 @@ fold_unions(Expr) ->
     ExprPipeD = concat(<<"| ">>, maybe_wrap_in_parens(Meta, ExprD)),
     combine_comments(Meta, ExprPipeD).
 
+-spec maybe_force_breaks(boolean()) -> erlfmt_algebra:doc().
 maybe_force_breaks(true) -> force_breaks();
 maybe_force_breaks(false) -> empty().
 
@@ -881,7 +903,7 @@ combine_comments_no_force(Meta, Doc) ->
     {Pre, Post} = comments(Meta),
     combine_post_comments(Post, Meta, combine_pre_comments(Pre, Meta, Doc)).
 
--spec combine_comments(erlfmt_scan:anno() | fmt_node(), erlfmt_algebra:doc()) ->
+-spec combine_comments(node_or_meta(), erlfmt_algebra:doc()) ->
     erlfmt_algebra:doc().
 combine_comments(Meta, Doc) ->
     {Pre, Post} = comments(Meta),
