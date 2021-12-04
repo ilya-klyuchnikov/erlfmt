@@ -266,7 +266,7 @@ next_break_fits(Doc) ->
     next_break_fits(Doc, enabled).
 
 -spec next_break_fits(doc(), enabled | disabled) -> doc().
-next_break_fits(Doc, Mode) when ?is_doc(Doc), Mode == enabled orelse Mode == disabled ->
+next_break_fits(Doc, Mode) ->
     #doc_fits{group = Doc, enabled_or_disabled = Mode}.
 
 % Forces the parent group and its parent groups to break.

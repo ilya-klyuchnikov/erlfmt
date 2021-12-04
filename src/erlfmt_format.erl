@@ -464,6 +464,8 @@ container(Meta, Values, Left, Right) ->
 flex_container(Meta, Values, Left, Right) ->
     container_common(Meta, Values, Left, Right, flex_break, last_fits).
 
+-spec call(erlfmt_scan:anno(), [fmt_node()], erlfmt_algebra:doc(), erlfmt_algebra:doc()) ->
+    erlfmt_algebra:doc().
 call(Meta, Values, Left, Right) ->
     container_common(Meta, Values, Left, Right, break, last_fits).
 
@@ -480,7 +482,7 @@ container_common(Meta, Values, Left, Right, BreakKind, LastFits) ->
 
 -record(break, {outer :: boolean(), inner :: boolean()}).
 
--type break_behaviour() :: flex_break | no_break | #break{}.
+-type break_behaviour() :: break | flex_break | no_break | #break{}.
 
 -spec break_behaviour(erlfmt_scan:anno(), [fmt_node()], break_behaviour()) -> break_behaviour().
 break_behaviour(Meta, Values, Break) ->
